@@ -1,5 +1,6 @@
 import { stripe } from '@/lib/stripe'
 import { getServiceSupabase } from '@/lib/supabase'
+import { sendOrderConfirmation } from '@/lib/email'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -14,6 +15,14 @@ export async function GET(request: NextRequest) {
     const supabase = getServiceSupabase()
 
     if (session.payment_status === 'paid' && session.metadata?.order_number) {
+      const { data: existing } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('order_number', session.metadata.order_number)
+        .single()
+
+      const alreadyPaid = existing?.status === 'paid' || existing?.status === 'fulfilled'
+
       await supabase
         .from('orders')
         .update({
@@ -27,6 +36,33 @@ export async function GET(request: NextRequest) {
           .from('residents')
           .update({ dues_owed: 0 })
           .eq('id', session.metadata.resident_id)
+      }
+
+      if (!alreadyPaid) {
+        const { data: orderForEmail } = await supabase
+          .from('orders')
+          .select('order_number, total, customer_name, customer_email, dues_amount, order_items(product_name, quantity, unit_price, pass_date)')
+          .eq('order_number', session.metadata.order_number)
+          .single()
+
+        if (orderForEmail) {
+          const productItems = (orderForEmail.order_items || [])
+            .filter((i: { product_name: string }) => i.product_name !== 'Outstanding HOA Dues')
+
+          await sendOrderConfirmation({
+            to: orderForEmail.customer_email,
+            customerName: orderForEmail.customer_name,
+            orderNumber: orderForEmail.order_number,
+            total: orderForEmail.total,
+            items: productItems.map((i: { product_name: string; quantity: number; unit_price: number; pass_date: string | null }) => ({
+              name: i.product_name,
+              quantity: i.quantity,
+              unitPrice: i.unit_price,
+              passDate: i.pass_date,
+            })),
+            duesAmount: orderForEmail.dues_amount || 0,
+          })
+        }
       }
     }
 
