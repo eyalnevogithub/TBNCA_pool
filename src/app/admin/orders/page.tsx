@@ -18,6 +18,8 @@ interface Order {
   created_at: string
   fulfilled_by: string | null
   fulfilled_at: string | null
+  qr_token: string | null
+  qr_valid: boolean
   order_items: { product_name: string; quantity: number; unit_price: number; subtotal: number; pass_date: string | null }[]
 }
 
@@ -50,6 +52,18 @@ export default function AdminOrdersPage() {
         status,
         ...(status === 'fulfilled' ? { fulfilled_by: adminEmail, fulfilled_at: now } : {}),
       } : o))
+    }
+  }
+
+  async function toggleQrValid(orderId: string, currentlyValid: boolean) {
+    const action = currentlyValid ? 'invalidate_qr' : 'reactivate_qr'
+    const res = await fetch('/api/admin/orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, action }),
+    })
+    if (res.ok) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, qr_valid: !currentlyValid } : o))
     }
   }
 
@@ -155,7 +169,30 @@ export default function AdminOrdersPage() {
                   </table>
                 </div>
 
-                <div className="flex gap-2">
+                {order.qr_token && (
+                  <div className={`rounded-lg p-3 mb-4 ${order.qr_valid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <p className={`text-sm font-medium ${order.qr_valid ? 'text-green-800' : 'text-red-800'}`}>
+                          QR Tag: {order.qr_valid ? 'Active' : 'Invalidated'}
+                        </p>
+                        <p className="text-xs text-tbnca-gray font-mono mt-1">{order.qr_token}</p>
+                      </div>
+                      <button
+                        onClick={() => toggleQrValid(order.id, order.qr_valid)}
+                        className={`px-3 py-1 rounded text-sm font-medium ${
+                          order.qr_valid
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {order.qr_valid ? 'Invalidate QR' : 'Reactivate QR'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
                   {order.status === 'paid' && (
                     <button
                       onClick={() => updateStatus(order.id, 'fulfilled')}

@@ -69,6 +69,11 @@ VALUES
   ('Day Pass', 'Single day pass for the TBNCA pool. Valid for the selected date only.', 10.00, 15.00, 5, 'day_pass')
 ON CONFLICT DO NOTHING;
 
+-- QR code columns on orders
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_token TEXT UNIQUE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_valid BOOLEAN DEFAULT true;
+CREATE INDEX IF NOT EXISTS idx_orders_qr_token ON orders(qr_token);
+
 -- Enable Row Level Security (but allow service role full access)
 ALTER TABLE residents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;

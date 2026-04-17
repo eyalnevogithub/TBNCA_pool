@@ -101,6 +101,7 @@ export async function POST(request: Request) {
   }
 
   const orderNumber = `TBNCA-${Date.now().toString(36).toUpperCase()}-${uuidv4().slice(0, 4).toUpperCase()}`
+  const qrToken = uuidv4()
 
   let subtotal = 0
   const lineItems: { price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number }; quantity: number }[] = []
@@ -192,6 +193,7 @@ export async function POST(request: Request) {
 
     const { error: orderError } = await supabase.from('orders').insert({
       order_number: orderNumber,
+      qr_token: qrToken,
       resident_id: residentId || null,
       customer_name: customerName,
       customer_address: customerAddress,

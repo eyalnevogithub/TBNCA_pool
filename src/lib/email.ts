@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import QRCode from 'qrcode'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -9,6 +10,7 @@ interface OrderConfirmationParams {
   total: number
   items: { name: string; quantity: number; unitPrice: number; passDate?: string | null }[]
   duesAmount: number
+  qrToken?: string
 }
 
 export async function sendOrderConfirmation({
@@ -18,7 +20,16 @@ export async function sendOrderConfirmation({
   total,
   items,
   duesAmount,
+  qrToken,
 }: OrderConfirmationParams) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+  const qrUrl = qrToken ? `${baseUrl}/tag/${qrToken}` : null
+
+  let qrDataUrl = ''
+  if (qrUrl) {
+    qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 2 })
+  }
+
   const itemRows = items
     .map(i => {
       const date = i.passDate ? ` (${i.passDate})` : ''
@@ -36,6 +47,15 @@ export async function sendOrderConfirmation({
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">1</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right">$${duesAmount.toFixed(2)}</td>
       </tr>`
+    : ''
+
+  const qrSection = qrDataUrl
+    ? `<div style="text-align:center;margin:24px 0;padding:20px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:8px">
+        <p style="margin:0 0 12px;font-weight:bold;color:#1a3a5c;font-size:16px">Your Digital Pool Tag</p>
+        <img src="${qrDataUrl}" alt="QR Code" style="width:200px;height:200px" />
+        <p style="margin:12px 0 0;color:#4a5568;font-size:13px">Show this QR code at the pool entrance.<br/>You can also access it anytime at:</p>
+        <p style="margin:4px 0 0"><a href="${qrUrl}" style="color:#2c5282;font-size:13px">${qrUrl}</a></p>
+      </div>`
     : ''
 
   const html = `
@@ -69,9 +89,10 @@ export async function sendOrderConfirmation({
             </tr>
           </tfoot>
         </table>
+        ${qrSection}
         <div style="background:#f0fff4;border:1px solid #c6f6d5;border-radius:6px;padding:16px;margin:16px 0">
           <p style="margin:0;color:#276749"><strong>What's next?</strong></p>
-          <p style="margin:8px 0 0;color:#276749">Your pool tags will be prepared for pickup or mailing. You will receive further instructions from the management office.</p>
+          <p style="margin:8px 0 0;color:#276749">Show your QR code at the pool entrance for quick entry. Pool staff will scan your code to verify your tags.</p>
         </div>
         <p style="color:#718096;font-size:14px">
           Questions? Contact Marshall Management Group at (713) 977-6644 or

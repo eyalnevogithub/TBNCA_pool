@@ -12,8 +12,27 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const { orderId, status, adminEmail } = await request.json()
+  const body = await request.json()
+  const { orderId, status, adminEmail, action } = body
   const supabase = getServiceSupabase()
+
+  if (action === 'invalidate_qr') {
+    const { error } = await supabase
+      .from('orders')
+      .update({ qr_valid: false })
+      .eq('id', orderId)
+    if (error) return Response.json({ error: error.message }, { status: 500 })
+    return Response.json({ success: true })
+  }
+
+  if (action === 'reactivate_qr') {
+    const { error } = await supabase
+      .from('orders')
+      .update({ qr_valid: true })
+      .eq('id', orderId)
+    if (error) return Response.json({ error: error.message }, { status: 500 })
+    return Response.json({ success: true })
+  }
 
   const updates: Record<string, unknown> = { status }
 

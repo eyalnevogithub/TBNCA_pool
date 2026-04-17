@@ -18,6 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TBNCA Pool - Thunderbird North Community Association",
   description: "Purchase pool tags and day passes for the Thunderbird North Community Association pool.",
+  manifest: "/manifest.json",
 }
 
 export default function RootLayout({
@@ -36,6 +37,11 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Footer />
         </CartProvider>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`,
+          }}
+        />
       </body>
     </html>
   )

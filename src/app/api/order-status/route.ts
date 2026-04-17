@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       if (!alreadyPaid) {
         const { data: orderForEmail } = await supabase
           .from('orders')
-          .select('order_number, total, customer_name, customer_email, dues_amount, order_items(product_name, quantity, unit_price, pass_date)')
+          .select('order_number, total, customer_name, customer_email, dues_amount, qr_token, order_items(product_name, quantity, unit_price, pass_date)')
           .eq('order_number', session.metadata.order_number)
           .single()
 
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
               passDate: i.pass_date,
             })),
             duesAmount: orderForEmail.dues_amount || 0,
+            qrToken: orderForEmail.qr_token,
           })
         }
       }
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
 
     const { data: order } = await supabase
       .from('orders')
-      .select('order_number, total, customer_name, customer_email')
+      .select('order_number, total, customer_name, customer_email, qr_token')
       .eq('stripe_session_id', sessionId)
       .single()
 
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
       total: order.total,
       customerName: order.customer_name,
       customerEmail: order.customer_email,
+      qrToken: order.qr_token,
     } : null
 
     return Response.json({ order: mapped })

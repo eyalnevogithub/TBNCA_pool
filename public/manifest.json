@@ -1,0 +1,21 @@
+{
+  "name": "TBNCA Pool Admin",
+  "short_name": "TBNCA Admin",
+  "description": "Pool tag scanner and admin for Thunderbird North Community Association",
+  "start_url": "/admin/scan",
+  "display": "standalone",
+  "background_color": "#1a3a5c",
+  "theme_color": "#1a3a5c",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

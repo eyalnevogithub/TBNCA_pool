@@ -38,6 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/residents', label: 'Residents' },
     { href: '/admin/products', label: 'Products' },
     { href: '/admin/waiver', label: 'Waiver' },
+    { href: '/admin/scan', label: 'Scan QR' },
   ]
 
   return (
