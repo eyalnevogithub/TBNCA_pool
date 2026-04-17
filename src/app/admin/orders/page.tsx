@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
 interface Order {
   id: string
@@ -15,6 +16,8 @@ interface Order {
   waiver_name: string
   waiver_date: string
   created_at: string
+  fulfilled_by: string | null
+  fulfilled_at: string | null
   order_items: { product_name: string; quantity: number; unit_price: number; subtotal: number; pass_date: string | null }[]
 }
 
@@ -32,13 +35,21 @@ export default function AdminOrdersPage() {
   }, [])
 
   async function updateStatus(orderId: string, status: string) {
+    const { data: { session } } = await supabase.auth.getSession()
+    const adminEmail = session?.user?.email || 'unknown'
+    const now = new Date().toISOString()
+
     const res = await fetch('/api/admin/orders', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, status }),
+      body: JSON.stringify({ orderId, status, adminEmail }),
     })
     if (res.ok) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o))
+      setOrders(prev => prev.map(o => o.id === orderId ? {
+        ...o,
+        status,
+        ...(status === 'fulfilled' ? { fulfilled_by: adminEmail, fulfilled_at: now } : {}),
+      } : o))
     }
   }
 
@@ -103,6 +114,17 @@ export default function AdminOrdersPage() {
                     <p className="text-sm">Date: {order.waiver_date}</p>
                   </div>
                 </div>
+
+                {order.fulfilled_by && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Fulfilled by:</strong> {order.fulfilled_by}
+                    </p>
+                    <p className="text-sm text-blue-800">
+                      <strong>Fulfilled at:</strong> {new Date(order.fulfilled_at!).toLocaleString()}
+                    </p>
+                  </div>
+                )}
 
                 <table className="w-full text-sm mb-4">
                   <thead>

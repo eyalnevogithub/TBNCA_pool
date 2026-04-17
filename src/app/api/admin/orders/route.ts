@@ -12,12 +12,19 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const { orderId, status } = await request.json()
+  const { orderId, status, adminEmail } = await request.json()
   const supabase = getServiceSupabase()
+
+  const updates: Record<string, unknown> = { status }
+
+  if (status === 'fulfilled') {
+    updates.fulfilled_by = adminEmail || 'unknown'
+    updates.fulfilled_at = new Date().toISOString()
+  }
 
   const { error } = await supabase
     .from('orders')
-    .update({ status })
+    .update(updates)
     .eq('id', orderId)
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
