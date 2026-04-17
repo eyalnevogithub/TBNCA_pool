@@ -19,6 +19,7 @@ export default function PricingPage() {
   const [waiverDate, setWaiverDate] = useState(new Date().toISOString().split('T')[0])
   const [waiverAgreed, setWaiverAgreed] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<{ product: Product; qty: number; price: number; date?: string }[]>([])
+  const [waiverHtml, setWaiverHtml] = useState('')
 
   useEffect(() => {
     fetch('/api/products')
@@ -28,6 +29,10 @@ export default function PricingPage() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+    fetch('/api/waiver')
+      .then(r => r.json())
+      .then(data => { if (data.html) setWaiverHtml(data.html) })
+      .catch(() => {})
   }, [])
 
   const tagProduct = products.find(p => p.product_type === 'pool_tag')
@@ -123,39 +128,10 @@ export default function PricingPage() {
         <h1 className="text-3xl font-bold text-tbnca-blue mb-6">Pool Use Waiver</h1>
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="font-bold text-lg mb-4">Waiver and Release of Liability</h2>
-          <div className="bg-gray-50 border rounded p-4 mb-6 text-sm text-tbnca-gray max-h-64 overflow-y-auto">
-            <p className="mb-3">
-              By signing this waiver, I acknowledge and agree to the following terms and conditions
-              regarding the use of the Thunderbird North Community Association swimming pool facilities:
-            </p>
-            <p className="mb-3">
-              <strong>Assumption of Risk:</strong> I understand that the use of the swimming pool and
-              surrounding facilities involves inherent risks, including but not limited to drowning,
-              slipping, falling, and other injuries. I voluntarily assume all risks associated with
-              the use of these facilities.
-            </p>
-            <p className="mb-3">
-              <strong>Release of Liability:</strong> I hereby release, waive, and discharge Thunderbird
-              North Community Association, its board members, officers, agents, employees, and
-              management company (Marshall Management Group Inc.) from any and all liability, claims,
-              demands, and causes of action arising out of or related to any injury, loss, or damage
-              that may occur as a result of my use of the pool facilities.
-            </p>
-            <p className="mb-3">
-              <strong>Rules Compliance:</strong> I agree to abide by all posted pool rules and
-              regulations. I understand that failure to comply may result in removal from the
-              premises and revocation of pool privileges.
-            </p>
-            <p className="mb-3">
-              <strong>Minor Supervision:</strong> I understand that children under 14 must be
-              accompanied by a responsible adult at all times while using the pool facilities.
-            </p>
-            <p>
-              <strong>Medical Acknowledgment:</strong> I confirm that I am physically fit to use
-              the pool facilities and have no medical conditions that would make such use dangerous.
-              I agree to not use the pool while under the influence of alcohol or drugs.
-            </p>
-          </div>
+          <div
+            className="bg-gray-50 border rounded p-4 mb-6 text-sm text-tbnca-gray max-h-64 overflow-y-auto prose prose-sm"
+            dangerouslySetInnerHTML={{ __html: waiverHtml }}
+          />
 
           <div className="space-y-4">
             <label className="flex items-start gap-3">
