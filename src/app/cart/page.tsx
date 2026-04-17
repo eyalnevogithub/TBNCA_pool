@@ -65,7 +65,13 @@ export default function CartPage() {
           messages.push(`Your household has already purchased ${existing} pool tag(s), reaching the limit of ${productLimits.tagMax}. Pool tags have been removed from your cart.`)
         } else if (item.quantity > remaining) {
           updateItemQuantity(index, remaining)
-          messages.push(`Your household has already purchased ${existing} pool tag(s). Your order has been adjusted from ${item.quantity} to ${remaining} tag(s) (limit: ${productLimits.tagMax} per household).`)
+          const newTotal = existing > 0
+            ? remaining * item.unitPrice
+            : item.product.price_resident + (remaining - 1) * item.unitPrice
+          messages.push(`Your household has already purchased ${existing} pool tag(s). Your order has been adjusted from ${item.quantity} to ${remaining} tag(s) (limit: ${productLimits.tagMax} per household). Updated total: $${newTotal.toFixed(2)}.`)
+        }
+        if (existing > 0 && remaining > 0) {
+          messages.push(`Since your household already has pool tags, all tags in this order are at the additional rate of $${item.unitPrice.toFixed(2)} each.`)
         }
       } else if (item.product.product_type === 'day_pass' && item.passDate) {
         const existingForDate = history.dayPassesByDate[item.passDate] || 0

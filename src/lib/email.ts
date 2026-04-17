@@ -25,9 +25,9 @@ export async function sendOrderConfirmation({
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
   const qrUrl = qrToken ? `${baseUrl}/tag/${qrToken}` : null
 
-  let qrDataUrl = ''
+  let qrPngBuffer: Buffer | null = null
   if (qrUrl) {
-    qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 200, margin: 2 })
+    qrPngBuffer = await QRCode.toBuffer(qrUrl, { width: 200, margin: 2, type: 'png' })
   }
 
   const itemRows = items
@@ -49,10 +49,10 @@ export async function sendOrderConfirmation({
       </tr>`
     : ''
 
-  const qrSection = qrDataUrl
+  const qrSection = qrUrl
     ? `<div style="text-align:center;margin:24px 0;padding:20px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:8px">
         <p style="margin:0 0 12px;font-weight:bold;color:#1a3a5c;font-size:16px">Your Digital Pool Tag</p>
-        <img src="${qrDataUrl}" alt="QR Code" style="width:200px;height:200px" />
+        <img src="cid:qrcode" alt="QR Code" width="200" height="200" style="width:200px;height:200px" />
         <p style="margin:12px 0 0;color:#4a5568;font-size:13px">Show this QR code at the pool entrance.<br/>You can also access it anytime at:</p>
         <p style="margin:4px 0 0"><a href="${qrUrl}" style="color:#2c5282;font-size:13px">${qrUrl}</a></p>
       </div>`
@@ -105,11 +105,16 @@ export async function sendOrderConfirmation({
     </div>
   `
 
+  const attachments = qrPngBuffer
+    ? [{ filename: 'qrcode.png', content: qrPngBuffer, contentId: 'qrcode' }]
+    : []
+
   const { error } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL || 'TBNCA Pool <onboarding@resend.dev>',
     to,
     subject: `Order Confirmation - ${orderNumber}`,
     html,
+    attachments,
   })
 
   if (error) {
