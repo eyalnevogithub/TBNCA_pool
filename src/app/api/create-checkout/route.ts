@@ -2,6 +2,19 @@ import { stripe } from '@/lib/stripe'
 import { getServiceSupabase } from '@/lib/supabase'
 import { v4 as uuidv4 } from 'uuid'
 
+const STREET_ABBREVIATIONS: Record<string, string> = {
+  street: 'st', st: 'st', lane: 'ln', ln: 'ln', drive: 'dr', dr: 'dr',
+  court: 'ct', ct: 'ct', circle: 'cir', cir: 'cir', boulevard: 'blvd',
+  blvd: 'blvd', avenue: 'ave', ave: 'ave', place: 'pl', pl: 'pl',
+  road: 'rd', rd: 'rd', terrace: 'ter', ter: 'ter', trail: 'trl',
+  trl: 'trl', parkway: 'pkwy', pkwy: 'pkwy', way: 'way',
+}
+
+function normalizeAddress(str: string): string {
+  return str.trim().toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ')
+    .split(' ').map(w => STREET_ABBREVIATIONS[w] || w).join(' ')
+}
+
 export async function POST(request: Request) {
   const body = await request.json()
   const {
@@ -21,6 +34,77 @@ export async function POST(request: Request) {
   }
 
   const supabase = getServiceSupabase()
+
+  // Fetch product limits from the database
+  const { data: products } = await supabase.from('products').select('id, max_quantity, product_type')
+  const tagProduct = products?.find(p => p.product_type === 'pool_tag')
+  const passProduct = products?.find(p => p.product_type === 'day_pass')
+
+  // Server-side limit validation for residents
+  if (isResident && customerAddress) {
+    const normalizedAddr = normalizeAddress(customerAddress)
+
+    // Find all residents at this address
+    const { data: allResidents } = await supabase.from('residents').select('id, address')
+    const householdIds = (allResidents || [])
+      .filter(r => normalizeAddress(r.address) === normalizedAddr)
+      .map(r => r.id)
+
+    if (householdIds.length > 0) {
+      // Get all paid/fulfilled orders for this household
+      const { data: pastOrders } = await supabase
+        .from('orders')
+        .select('order_items(product_name, quantity, pass_date)')
+        .in('resident_id', householdIds)
+        .in('status', ['paid', 'fulfilled'])
+
+      let existingTags = 0
+      const existingPassesByDate: Record<string, number> = {}
+
+      for (const order of pastOrders || []) {
+        for (const item of order.order_items || []) {
+          if (item.product_name === 'Pool Tag') {
+            existingTags += item.quantity
+          } else if (item.product_name === 'Day Pass' && item.pass_date) {
+            existingPassesByDate[item.pass_date] = (existingPassesByDate[item.pass_date] || 0) + item.quantity
+          }
+        }
+      }
+
+      // Count what's in this order
+      let newTags = 0
+      const newPassesByDate: Record<string, number> = {}
+      for (const item of items) {
+        if (item.productName === 'Pool Tag') {
+          newTags += item.quantity
+        } else if (item.productName === 'Day Pass' && item.passDate) {
+          newPassesByDate[item.passDate] = (newPassesByDate[item.passDate] || 0) + item.quantity
+        }
+      }
+
+      // Validate pool tag limit
+      if (tagProduct && existingTags + newTags > tagProduct.max_quantity) {
+        const remaining = Math.max(0, tagProduct.max_quantity - existingTags)
+        return Response.json({
+          error: `Your household has already purchased ${existingTags} pool tag(s). The limit is ${tagProduct.max_quantity} per household. You can purchase ${remaining} more.`,
+        }, { status: 400 })
+      }
+
+      // Validate day pass limit per date
+      if (passProduct) {
+        for (const [date, qty] of Object.entries(newPassesByDate)) {
+          const existingForDate = existingPassesByDate[date] || 0
+          if (existingForDate + qty > passProduct.max_quantity) {
+            const remaining = Math.max(0, passProduct.max_quantity - existingForDate)
+            return Response.json({
+              error: `Your household has already purchased ${existingForDate} day pass(es) for ${date}. The limit is ${passProduct.max_quantity} per household per day. You can purchase ${remaining} more for that date.`,
+            }, { status: 400 })
+          }
+        }
+      }
+    }
+  }
+
   const orderNumber = `TBNCA-${Date.now().toString(36).toUpperCase()}-${uuidv4().slice(0, 4).toUpperCase()}`
 
   let subtotal = 0

@@ -40,8 +40,6 @@ function nameMatches(input: string, stored: string): boolean {
 
   if (normalizedInput === normalizedStored) return true
 
-  // "John and Jane Smith" should match "Jane Smith"
-  // Split stored name on " and " or " & " to check if input matches either person
   const couples = normalizedStored.split(/\s+(?:and|&)\s+/)
   if (couples.length === 2) {
     const lastName = couples[1].includes(' ')
@@ -85,9 +83,41 @@ export async function POST(request: Request) {
     return Response.json({ verified: false })
   }
 
+  // Find all residents at the same address (household)
+  const householdResidentIds = residents
+    .filter(r => normalizeAddress(r.address) === normalizedAddress)
+    .map(r => r.id)
+
+  // Look up past orders for this household (paid or fulfilled only)
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('id, order_items(product_name, quantity, pass_date, product_id)')
+    .in('resident_id', householdResidentIds)
+    .in('status', ['paid', 'fulfilled'])
+
+  let tagsPurchased = 0
+  const dayPassesByDate: Record<string, number> = {}
+
+  if (orders) {
+    for (const order of orders) {
+      for (const item of order.order_items || []) {
+        if (item.product_name === 'Pool Tag') {
+          tagsPurchased += item.quantity
+        } else if (item.product_name === 'Day Pass' && item.pass_date) {
+          const date = item.pass_date
+          dayPassesByDate[date] = (dayPassesByDate[date] || 0) + item.quantity
+        }
+      }
+    }
+  }
+
   return Response.json({
     verified: true,
     residentId: match.id,
     duesOwed: match.dues_owed || 0,
+    purchaseHistory: {
+      tagsPurchased,
+      dayPassesByDate,
+    },
   })
 }

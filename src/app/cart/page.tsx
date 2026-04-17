@@ -10,6 +10,11 @@ interface DuesInfo {
   residentId: string
 }
 
+interface PurchaseHistory {
+  tagsPurchased: number
+  dayPassesByDate: Record<string, number>
+}
+
 export default function CartPage() {
   const router = useRouter()
   const { items, waiver, removeItem, getSubtotal, clearCart } = useCart()
@@ -21,7 +26,9 @@ export default function CartPage() {
   const [verifyError, setVerifyError] = useState('')
   const [dues, setDues] = useState<DuesInfo | null>(null)
   const [residentId, setResidentId] = useState<string | null>(null)
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [checkoutError, setCheckoutError] = useState('')
 
   const hasOnlyDayPasses = items.every(i => i.product.product_type === 'day_pass')
 
@@ -45,6 +52,9 @@ export default function CartPage() {
       if (data.verified) {
         setVerified(true)
         setResidentId(data.residentId)
+        if (data.purchaseHistory) {
+          setPurchaseHistory(data.purchaseHistory)
+        }
         if (data.duesOwed > 0) {
           setDues({ amount: data.duesOwed, residentId: data.residentId })
         }
@@ -67,6 +77,7 @@ export default function CartPage() {
   async function handleCheckout() {
     if (!email.trim()) return
     setSubmitting(true)
+    setCheckoutError('')
 
     try {
       const res = await fetch('/api/create-checkout', {
@@ -96,10 +107,10 @@ export default function CartPage() {
         clearCart()
         window.location.href = data.url
       } else {
-        alert(data.error || 'Failed to create checkout session.')
+        setCheckoutError(data.error || 'Failed to create checkout session.')
       }
     } catch {
-      alert('An error occurred. Please try again.')
+      setCheckoutError('An error occurred. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -218,6 +229,24 @@ export default function CartPage() {
           </div>
           {residentId && <p className="text-sm text-green-600 mb-4">Verified TBNCA resident</p>}
           {!residentId && <p className="text-sm text-tbnca-gray mb-4">Guest checkout</p>}
+
+          {purchaseHistory && residentId && (purchaseHistory.tagsPurchased > 0 || Object.keys(purchaseHistory.dayPassesByDate).length > 0) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-sm">
+              <p className="font-medium text-blue-800 mb-2">Your household&apos;s purchase history:</p>
+              {purchaseHistory.tagsPurchased > 0 && (
+                <p className="text-blue-700">Pool Tags: {purchaseHistory.tagsPurchased} purchased</p>
+              )}
+              {Object.entries(purchaseHistory.dayPassesByDate).map(([date, qty]) => (
+                <p key={date} className="text-blue-700">Day Passes for {date}: {qty} purchased</p>
+              ))}
+            </div>
+          )}
+
+          {checkoutError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm mb-4">
+              {checkoutError}
+            </div>
+          )}
 
           <button
             onClick={handleCheckout}
