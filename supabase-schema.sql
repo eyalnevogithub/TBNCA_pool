@@ -69,6 +69,16 @@ VALUES
   ('Day Pass', 'Single day pass for the TBNCA pool. Valid for the selected date only.', 10.00, 15.00, 5, 'day_pass')
 ON CONFLICT DO NOTHING;
 
+-- Admin users table (role-based access)
+CREATE TABLE IF NOT EXISTS admin_users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL DEFAULT 'validator' CHECK (role IN ('editor', 'validator')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+
 -- QR code columns on orders
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_token TEXT UNIQUE;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS qr_valid BOOLEAN DEFAULT true;
