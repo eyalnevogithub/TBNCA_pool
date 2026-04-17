@@ -78,7 +78,7 @@ export default function AdminResidentsPage() {
           CSV format: <code className="bg-gray-100 px-1 rounded">full_name,address,email,dues_owed</code><br />
           First row should be headers. Email and dues_owed are optional.
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <input type="file" accept=".csv" ref={fileRef} className="text-sm" />
           <button
             onClick={handleImport}
@@ -101,7 +101,7 @@ export default function AdminResidentsPage() {
         />
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
@@ -140,6 +140,32 @@ export default function AdminResidentsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && <p className="p-4 text-center text-tbnca-gray">No residents found.</p>}
+      </div>
+
+      <div className="md:hidden space-y-3">
+        {filtered.map(r => (
+          <div key={r.id} className="bg-white rounded-lg shadow p-4">
+            <div className="flex justify-between items-start mb-2">
+              <p className="font-medium">{r.full_name}</p>
+              {r.dues_owed > 0 ? (
+                <span className="text-red-600 font-medium text-sm">${r.dues_owed.toFixed(2)}</span>
+              ) : (
+                <span className="text-green-600 text-sm">Paid</span>
+              )}
+            </div>
+            <p className="text-sm text-tbnca-gray">{r.address}</p>
+            {r.email && <p className="text-sm text-tbnca-gray">{r.email}</p>}
+            {r.dues_owed > 0 && (
+              <button
+                onClick={() => markDuesPaid(r.id)}
+                className="text-tbnca-blue-light hover:underline text-xs mt-2"
+              >
+                Mark Paid
+              </button>
+            )}
+          </div>
+        ))}
+        {filtered.length === 0 && <p className="text-center text-tbnca-gray">No residents found.</p>}
       </div>
       <p className="text-sm text-tbnca-gray mt-2">Showing {filtered.length} of {residents.length} residents</p>
     </div>

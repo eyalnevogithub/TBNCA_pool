@@ -15,9 +15,14 @@ interface PurchaseHistory {
   dayPassesByDate: Record<string, number>
 }
 
+interface ProductLimits {
+  tagMax: number
+  passMax: number
+}
+
 export default function CartPage() {
   const router = useRouter()
-  const { items, waiver, removeItem, getSubtotal, clearCart } = useCart()
+  const { items, waiver, removeItem, updateItemQuantity, getSubtotal, clearCart } = useCart()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [email, setEmail] = useState('')
@@ -27,10 +32,56 @@ export default function CartPage() {
   const [dues, setDues] = useState<DuesInfo | null>(null)
   const [residentId, setResidentId] = useState<string | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory | null>(null)
+  const [limits, setLimits] = useState<ProductLimits | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
+  const [adjustmentMessages, setAdjustmentMessages] = useState<string[]>([])
 
   const hasOnlyDayPasses = items.every(i => i.product.product_type === 'day_pass')
+
+  function getItemTotal(item: typeof items[0]): number {
+    if (item.product.product_type === 'pool_tag') {
+      const hasPreviousTags = purchaseHistory && purchaseHistory.tagsPurchased > 0
+      if (hasPreviousTags) return item.unitPrice * item.quantity
+      if (item.quantity <= 0) return 0
+      return item.product.price_resident + (item.quantity - 1) * item.unitPrice
+    }
+    return item.unitPrice * item.quantity
+  }
+
+  function getCartSubtotal(): number {
+    return items.reduce((sum, item) => sum + getItemTotal(item), 0)
+  }
+
+  function adjustCartForLimits(history: PurchaseHistory, productLimits: ProductLimits) {
+    const messages: string[] = []
+
+    items.forEach((item, index) => {
+      if (item.product.product_type === 'pool_tag') {
+        const existing = history.tagsPurchased
+        const remaining = Math.max(0, productLimits.tagMax - existing)
+        if (remaining === 0) {
+          removeItem(index)
+          messages.push(`Your household has already purchased ${existing} pool tag(s), reaching the limit of ${productLimits.tagMax}. Pool tags have been removed from your cart.`)
+        } else if (item.quantity > remaining) {
+          updateItemQuantity(index, remaining)
+          messages.push(`Your household has already purchased ${existing} pool tag(s). Your order has been adjusted from ${item.quantity} to ${remaining} tag(s) (limit: ${productLimits.tagMax} per household).`)
+        }
+      } else if (item.product.product_type === 'day_pass' && item.passDate) {
+        const existingForDate = history.dayPassesByDate[item.passDate] || 0
+        const remaining = Math.max(0, productLimits.passMax - existingForDate)
+        if (remaining === 0) {
+          removeItem(index)
+          messages.push(`Your household has already purchased ${existingForDate} day pass(es) for ${item.passDate}, reaching the limit of ${productLimits.passMax}. Day passes for that date have been removed.`)
+        } else if (item.quantity > remaining) {
+          updateItemQuantity(index, remaining)
+          messages.push(`Your household has already purchased ${existingForDate} day pass(es) for ${item.passDate}. Your order has been adjusted from ${item.quantity} to ${remaining} pass(es) (limit: ${productLimits.passMax} per day).`)
+        }
+      }
+    })
+
+    setAdjustmentMessages(messages)
+  }
 
   async function handleVerify() {
     if (!name.trim() || !address.trim() || !email.trim()) {
@@ -40,24 +91,37 @@ export default function CartPage() {
 
     setVerifying(true)
     setVerifyError('')
+    setAdjustmentMessages([])
 
     try {
-      const res = await fetch('/api/verify-resident', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), address: address.trim() }),
-      })
-      const data = await res.json()
+      const [verifyRes, productsRes] = await Promise.all([
+        fetch('/api/verify-resident', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), address: address.trim() }),
+        }),
+        fetch('/api/products'),
+      ])
+      const data = await verifyRes.json()
+      const products = await productsRes.json()
+
+      const tagProduct = products.find((p: { product_type: string }) => p.product_type === 'pool_tag')
+      const passProduct = products.find((p: { product_type: string }) => p.product_type === 'day_pass')
+      const productLimits: ProductLimits = {
+        tagMax: tagProduct?.max_quantity || 20,
+        passMax: passProduct?.max_quantity || 5,
+      }
+      setLimits(productLimits)
 
       if (data.verified) {
         setVerified(true)
         setResidentId(data.residentId)
-        if (data.purchaseHistory) {
-          setPurchaseHistory(data.purchaseHistory)
-        }
+        const history: PurchaseHistory = data.purchaseHistory || { tagsPurchased: 0, dayPassesByDate: {} }
+        setPurchaseHistory(history)
         if (data.duesOwed > 0) {
           setDues({ amount: data.duesOwed, residentId: data.residentId })
         }
+        adjustCartForLimits(history, productLimits)
       } else if (hasOnlyDayPasses) {
         setVerified(true)
         setResidentId(null)
@@ -117,10 +181,19 @@ export default function CartPage() {
   }
 
   if (items.length === 0) {
+    const hasAdjustments = adjustmentMessages.length > 0
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <h1 className="text-3xl font-bold text-tbnca-blue mb-4">Your Cart</h1>
-        <p className="text-tbnca-gray mb-6">Your cart is empty.</p>
+        {hasAdjustments ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left">
+            {adjustmentMessages.map((msg, i) => (
+              <p key={i} className="text-amber-800 text-sm">{msg}</p>
+            ))}
+          </div>
+        ) : (
+          <p className="text-tbnca-gray mb-6">Your cart is empty.</p>
+        )}
         <Link href="/pricing" className="inline-block bg-tbnca-gold hover:bg-tbnca-gold-light text-tbnca-blue font-bold py-3 px-8 rounded-lg transition-colors">
           Browse Products
         </Link>
@@ -128,33 +201,39 @@ export default function CartPage() {
     )
   }
 
-  const subtotal = getSubtotal()
+  const subtotal = getCartSubtotal()
   const total = subtotal + (dues?.amount || 0)
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold text-tbnca-blue mb-6">Your Cart</h1>
 
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
+      {adjustmentMessages.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          {adjustmentMessages.map((msg, i) => (
+            <p key={i} className="text-amber-800 text-sm">{msg}</p>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
         <h2 className="font-bold text-lg mb-4">Cart Items</h2>
         {items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between py-3 border-b last:border-0">
-            <div>
+          <div key={i} className="flex items-start sm:items-center justify-between py-3 border-b last:border-0 gap-2">
+            <div className="min-w-0">
               <span className="font-medium">{item.product.name}</span>
               <span className="text-tbnca-gray ml-2">x{item.quantity}</span>
-              {item.passDate && <span className="text-tbnca-gray ml-2">({item.passDate})</span>}
+              {item.passDate && <span className="text-tbnca-gray ml-2 block sm:inline">({item.passDate})</span>}
             </div>
-            <div className="flex items-center gap-4">
-              <span className="font-medium">${(item.unitPrice * item.quantity).toFixed(2)}</span>
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <span className="font-medium">${getItemTotal(item).toFixed(2)}</span>
               <button onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 text-sm">Remove</button>
             </div>
           </div>
         ))}
         {dues && (
           <div className="flex items-center justify-between py-3 border-b bg-amber-50 px-3 rounded mt-2">
-            <div>
-              <span className="font-medium">Outstanding HOA Dues</span>
-            </div>
+            <span className="font-medium">Outstanding HOA Dues</span>
             <span className="font-medium">${dues.amount.toFixed(2)}</span>
           </div>
         )}
@@ -165,7 +244,7 @@ export default function CartPage() {
       </div>
 
       {!verified ? (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
           <h2 className="font-bold text-lg mb-2">Verify Your Information</h2>
           <p className="text-tbnca-gray text-sm mb-4">
             {hasOnlyDayPasses
@@ -218,29 +297,17 @@ export default function CartPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">✓</div>
-            <div>
-              <p className="font-bold">{name}</p>
-              <p className="text-sm text-tbnca-gray">{address}</p>
-              <p className="text-sm text-tbnca-gray">{email}</p>
+            <div className="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold shrink-0">✓</div>
+            <div className="min-w-0">
+              <p className="font-bold truncate">{name}</p>
+              <p className="text-sm text-tbnca-gray truncate">{address}</p>
+              <p className="text-sm text-tbnca-gray truncate">{email}</p>
             </div>
           </div>
           {residentId && <p className="text-sm text-green-600 mb-4">Verified TBNCA resident</p>}
           {!residentId && <p className="text-sm text-tbnca-gray mb-4">Guest checkout</p>}
-
-          {purchaseHistory && residentId && (purchaseHistory.tagsPurchased > 0 || Object.keys(purchaseHistory.dayPassesByDate).length > 0) && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-sm">
-              <p className="font-medium text-blue-800 mb-2">Your household&apos;s purchase history:</p>
-              {purchaseHistory.tagsPurchased > 0 && (
-                <p className="text-blue-700">Pool Tags: {purchaseHistory.tagsPurchased} purchased</p>
-              )}
-              {Object.entries(purchaseHistory.dayPassesByDate).map(([date, qty]) => (
-                <p key={date} className="text-blue-700">Day Passes for {date}: {qty} purchased</p>
-              ))}
-            </div>
-          )}
 
           {checkoutError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm mb-4">
@@ -259,7 +326,7 @@ export default function CartPage() {
       )}
 
       <Link href="/pricing" className="text-tbnca-blue-light hover:underline text-sm">
-        ← Back to products
+        &larr; Back to products
       </Link>
     </div>
   )

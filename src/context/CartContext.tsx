@@ -13,6 +13,7 @@ interface CartContextType {
   waiver: WaiverData | null
   addItem: (product: Product, quantity: number, unitPrice: number, passDate?: string) => void
   removeItem: (index: number) => void
+  updateItemQuantity: (index: number, quantity: number) => void
   clearCart: () => void
   setWaiver: (waiver: WaiverData) => void
   getSubtotal: () => number
@@ -43,6 +44,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.filter((_, i) => i !== index))
   }
 
+  function updateItemQuantity(index: number, quantity: number) {
+    setItems(prev => {
+      if (quantity <= 0) return prev.filter((_, i) => i !== index)
+      const updated = [...prev]
+      updated[index] = { ...updated[index], quantity }
+      return updated
+    })
+  }
+
   function clearCart() {
     setItems([])
     setWaiver(null)
@@ -57,7 +67,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <CartContext.Provider value={{ items, waiver, addItem, removeItem, clearCart, setWaiver, getSubtotal, getItemCount }}>
+    <CartContext.Provider value={{ items, waiver, addItem, removeItem, updateItemQuantity, clearCart, setWaiver, getSubtotal, getItemCount }}>
       {children}
     </CartContext.Provider>
   )

@@ -93,13 +93,7 @@ export default function PricingPage() {
     setWaiver({ name: waiverName.trim(), date: waiverDate })
     for (const s of selectedProducts) {
       if (s.product.product_type === 'pool_tag') {
-        const firstPrice = s.product.price_resident
-        const additionalPrice = s.product.price_guest
-        for (let i = 0; i < s.qty; i++) {
-          const existingCount = items.filter(it => it.product.product_type === 'pool_tag').length + i
-          const price = existingCount === 0 ? firstPrice : additionalPrice
-          addItem(s.product, 1, price)
-        }
+        addItem(s.product, s.qty, s.product.price_guest)
       } else {
         const unitPrice = isResident ? s.product.price_resident : s.product.price_guest
         addItem(s.product, s.qty, unitPrice, s.date)

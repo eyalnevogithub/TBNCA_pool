@@ -60,7 +60,7 @@ export default function AdminOrdersPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-tbnca-blue mb-6">Orders</h1>
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         {['all', 'pending', 'paid', 'fulfilled', 'cancelled'].map(f => (
           <button
             key={f}
@@ -77,35 +77,38 @@ export default function AdminOrdersPage() {
         {filtered.map(order => (
           <div key={order.id} className="bg-white rounded-lg shadow">
             <div
-              className="p-4 flex items-center justify-between cursor-pointer"
+              className="p-4 cursor-pointer"
               onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}
             >
-              <div className="flex items-center gap-4">
-                <span className="font-mono text-sm font-bold">{order.order_number}</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  order.status === 'paid' ? 'bg-green-100 text-green-700' :
-                  order.status === 'fulfilled' ? 'bg-blue-100 text-blue-700' :
-                  order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-red-100 text-red-700'
-                }`}>
-                  {order.status}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <span className="font-mono text-xs sm:text-sm font-bold">{order.order_number}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    order.status === 'paid' ? 'bg-green-100 text-green-700' :
+                    order.status === 'fulfilled' ? 'bg-blue-100 text-blue-700' :
+                    order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {order.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-4 text-sm">
+                  <span className="hidden sm:inline">{order.customer_name}</span>
+                  <span className="font-bold">${order.total.toFixed(2)}</span>
+                  <span className="text-tbnca-gray text-xs sm:text-sm">{new Date(order.created_at).toLocaleDateString()}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span>{order.customer_name}</span>
-                <span className="font-bold">${order.total.toFixed(2)}</span>
-                <span className="text-tbnca-gray">{new Date(order.created_at).toLocaleDateString()}</span>
-              </div>
+              <p className="text-sm text-tbnca-gray mt-1 sm:hidden">{order.customer_name}</p>
             </div>
 
             {expandedId === order.id && (
               <div className="border-t p-4 bg-gray-50">
-                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div className="grid sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-tbnca-gray">Customer</p>
                     <p className="font-medium">{order.customer_name}</p>
-                    <p className="text-sm">{order.customer_address}</p>
-                    <p className="text-sm">{order.customer_email}</p>
+                    <p className="text-sm break-all">{order.customer_address}</p>
+                    <p className="text-sm break-all">{order.customer_email}</p>
                     <p className="text-sm mt-1">{order.is_resident ? 'Verified Resident' : 'Guest'}</p>
                   </div>
                   <div>
@@ -126,29 +129,31 @@ export default function AdminOrdersPage() {
                   </div>
                 )}
 
-                <table className="w-full text-sm mb-4">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-1">Item</th>
-                      <th className="text-right py-1">Qty</th>
-                      <th className="text-right py-1">Price</th>
-                      <th className="text-right py-1">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {order.order_items?.map((item, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="py-1">
-                          {item.product_name}
-                          {item.pass_date && <span className="text-tbnca-gray ml-1">({item.pass_date})</span>}
-                        </td>
-                        <td className="text-right">{item.quantity}</td>
-                        <td className="text-right">${item.unit_price.toFixed(2)}</td>
-                        <td className="text-right">${item.subtotal.toFixed(2)}</td>
+                <div className="overflow-x-auto -mx-4 px-4">
+                  <table className="w-full text-sm mb-4 min-w-[320px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-1">Item</th>
+                        <th className="text-right py-1">Qty</th>
+                        <th className="text-right py-1">Price</th>
+                        <th className="text-right py-1">Subtotal</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {order.order_items?.map((item, i) => (
+                        <tr key={i} className="border-b">
+                          <td className="py-1">
+                            {item.product_name}
+                            {item.pass_date && <span className="text-tbnca-gray ml-1">({item.pass_date})</span>}
+                          </td>
+                          <td className="text-right">{item.quantity}</td>
+                          <td className="text-right">${item.unit_price.toFixed(2)}</td>
+                          <td className="text-right">${item.subtotal.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
                 <div className="flex gap-2">
                   {order.status === 'paid' && (

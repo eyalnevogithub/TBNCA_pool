@@ -35,31 +35,29 @@ export async function POST(request: Request) {
 
   const supabase = getServiceSupabase()
 
-  // Fetch product limits from the database
-  const { data: products } = await supabase.from('products').select('id, max_quantity, product_type')
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, max_quantity, product_type, price_resident, price_guest')
   const tagProduct = products?.find(p => p.product_type === 'pool_tag')
   const passProduct = products?.find(p => p.product_type === 'day_pass')
 
-  // Server-side limit validation for residents
+  let existingTags = 0
+  const existingPassesByDate: Record<string, number> = {}
+
   if (isResident && customerAddress) {
     const normalizedAddr = normalizeAddress(customerAddress)
 
-    // Find all residents at this address
     const { data: allResidents } = await supabase.from('residents').select('id, address')
     const householdIds = (allResidents || [])
       .filter(r => normalizeAddress(r.address) === normalizedAddr)
       .map(r => r.id)
 
     if (householdIds.length > 0) {
-      // Get all paid/fulfilled orders for this household
       const { data: pastOrders } = await supabase
         .from('orders')
         .select('order_items(product_name, quantity, pass_date)')
         .in('resident_id', householdIds)
         .in('status', ['paid', 'fulfilled'])
-
-      let existingTags = 0
-      const existingPassesByDate: Record<string, number> = {}
 
       for (const order of pastOrders || []) {
         for (const item of order.order_items || []) {
@@ -71,7 +69,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // Count what's in this order
       let newTags = 0
       const newPassesByDate: Record<string, number> = {}
       for (const item of items) {
@@ -82,7 +79,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // Validate pool tag limit
       if (tagProduct && existingTags + newTags > tagProduct.max_quantity) {
         const remaining = Math.max(0, tagProduct.max_quantity - existingTags)
         return Response.json({
@@ -90,7 +86,6 @@ export async function POST(request: Request) {
         }, { status: 400 })
       }
 
-      // Validate day pass limit per date
       if (passProduct) {
         for (const [date, qty] of Object.entries(newPassesByDate)) {
           const existingForDate = existingPassesByDate[date] || 0
@@ -111,28 +106,64 @@ export async function POST(request: Request) {
   const lineItems: { price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number }; quantity: number }[] = []
 
   for (const item of items) {
-    const amount = Math.round(item.unitPrice * 100)
-    subtotal += item.unitPrice * item.quantity
-    lineItems.push({
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: item.productName,
-          description: item.passDate ? `Date: ${item.passDate}` : undefined,
+    if (item.productName === 'Pool Tag' && tagProduct) {
+      const firstPrice = tagProduct.price_resident
+      const additionalPrice = tagProduct.price_guest
+      const isFirstEver = existingTags === 0
+
+      if (isFirstEver && item.quantity >= 1) {
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: 'Pool Tag' },
+            unit_amount: Math.round(firstPrice * 100),
+          },
+          quantity: 1,
+        })
+        if (item.quantity > 1) {
+          lineItems.push({
+            price_data: {
+              currency: 'usd',
+              product_data: { name: 'Pool Tag (additional)' },
+              unit_amount: Math.round(additionalPrice * 100),
+            },
+            quantity: item.quantity - 1,
+          })
+        }
+        subtotal += firstPrice + (item.quantity - 1) * additionalPrice
+      } else {
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: 'Pool Tag' },
+            unit_amount: Math.round(additionalPrice * 100),
+          },
+          quantity: item.quantity,
+        })
+        subtotal += additionalPrice * item.quantity
+      }
+    } else {
+      const amount = Math.round(item.unitPrice * 100)
+      subtotal += item.unitPrice * item.quantity
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: item.productName,
+            description: item.passDate ? `Date: ${item.passDate}` : undefined,
+          },
+          unit_amount: amount,
         },
-        unit_amount: amount,
-      },
-      quantity: item.quantity,
-    })
+        quantity: item.quantity,
+      })
+    }
   }
 
   if (duesAmount > 0) {
     lineItems.push({
       price_data: {
         currency: 'usd',
-        product_data: {
-          name: 'Outstanding HOA Dues',
-        },
+        product_data: { name: 'Outstanding HOA Dues' },
         unit_amount: Math.round(duesAmount * 100),
       },
       quantity: 1,
